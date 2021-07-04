@@ -2,6 +2,7 @@ import cstruct
 import uuid
 import os
 import io
+import sys
 
 # from 0x30 to 0x1cf
 class asa_field1(cstruct.CStruct):
@@ -173,6 +174,74 @@ def parse_block(bin_file):
             block_meta_data = parse_field1_headers(meta_data_bin)
 
     return block_header, block_meta_data
+
+
+
+
+
+class AsaBlock():
+    def __init__(self, asa_block_header, meta_data, data):
+        self._asa_block_header = asa_block_header
+        self._meta_data = meta_data
+        self._data = data
+
+    def __str__(self):
+        return f"[{self._asa_block_header.UUID}]"
+    
+    @property
+    def children(self):
+        child_list = []
+        if self._meta_data is not None:
+            if isinstance(self._meta_data, list):
+                child_list.extend(self._meta_data)
+            else:
+                child_list.append(self._meta_data)
+        if self._data is not None:
+            if isinstance(self._data, list):
+                child_list.extend(self._data)
+            else:
+                child_list.append(self._data)
+        return child_list
+        
+
+
+
+def pprint_tree(node, file=None, _prefix="", _last=True):
+    print(_prefix, "`- " if _last else "|- ", str(node), sep="", file=file)
+    _prefix += "   " if _last else "|  "
+    if hasattr(node, "children"):
+        child_count = len(node.children)
+        for i, child in enumerate(node.children):
+            _last = i == (child_count - 1)
+            pprint_tree(child, file, _prefix, _last)
+
+
+
+def make_blocks(bin_file):
+    header, header_metadata_headers = parse_block(bin_file)
+    starting_offset = bin_file.tell()
+    current_size = bin_file.tell() - starting_offset
+    data = None
+    if header.HasSubBlocks:
+        data = []
+        while current_size < header.DataLength:
+            data.append(make_blocks(bin_file))
+            current_size = bin_file.tell() - starting_offset
+    else:
+        if header.DataLength > 0:
+            data = f"DATA BLOCK [{hex(header.DataLength)}]"
+            bin_file.seek(header.DataLength, os.SEEK_CUR)
+    
+    return AsaBlock(header, header_metadata_headers, data)
+
+
+
+
+if __name__ == "__main__":
+   with open(sys.argv[1], "rb") as bin_file:
+       bin_file.seek(0x10, os.SEEK_SET)
+       pprint_tree(make_blocks(bin_file))
+
 
 
 #pos = 0x2a0
