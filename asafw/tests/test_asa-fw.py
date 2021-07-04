@@ -61,7 +61,6 @@ def test_gen_raw_field1_headers():
     assert(len(data) == 0x1a0)
     assert(data == raw_header_2[0x30:0x1d0])
 
-
 def test_block_header():
     header1 = asafw.asa_block(raw_header_1[0x10:0x30])
     assert(header1.meta_data_length == 0x1a)
@@ -69,7 +68,6 @@ def test_block_header():
     assert(header1.sub_blocks == 1)
     assert(header1.data_length == 0x62c88500)
     assert(header1.DataLength == 0x62c8850)
-
 
 def test_get_next_block():
     bin_file = io.BytesIO(raw_header_1)
@@ -97,3 +95,7 @@ def test_get_next_block():
     assert(next_header.UUID == uuid.UUID('1a4dbf47-907c-fc49-9041-cdeba6c3f647'))
     assert(next_header.MetaDataLength == 0)
     assert(next_header_metadata is None)
+
+def test_gen_block1():
+    block_header = asafw.asa_block(UUID=asafw.UUID_MAIN_CONTAINER, HasSubBlocks=True, MetaDataLength=0x1a0, DataLength=0x62c8850)
+    assert(block_header.pack() == raw_header_1[0x10:0x30])

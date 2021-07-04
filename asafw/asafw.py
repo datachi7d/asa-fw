@@ -146,17 +146,34 @@ class asa_block(cstruct.CStruct):
     @UUID.setter
     def UUID(self, val):
         if isinstance(val, str):
-            self.block_uuid_raw = uuid.UUID(val)
-    
+            self.block_uuid_raw = [int(x) for x in uuid.UUID(val).bytes]
+        elif isinstance(val, uuid.UUID):
+            self.block_uuid_raw = [int(x) for x in val.bytes]
+
     @property
     def HasSubBlocks(self):
         return True if self.sub_blocks == 1 else False
 
-UUID_MAIN_CONTAINER = uuid.UUID('60d090eb-09f7-1a4a-9f30-9e45f7287490')
+    @HasSubBlocks.setter
+    def HasSubBlocks(self, val):
+        if val == True:
+            self.sub_blocks = 1
+        else:
+            self.sub_blocks = 0
+
+
+UUID_ASA_FW_BLOB =          uuid.UUID('11bb8d46-d638-014d-a26b-7d66620dfc74')
+UUID_MAIN_CONTAINER =       uuid.UUID('60d090eb-09f7-1a4a-9f30-9e45f7287490')
+UUID_FW_CONTAINER =         uuid.UUID('71546a9d-ae27-ef42-9798-c3dfbe0dc55e')
+UUID_KERNEL_PARAMS =        uuid.UUID('810e04c5-2ed1-2d47-8921-a02bb0006535')
+UUID_ROOTFS_FW_BLOCK =      uuid.UUID('1a4dbf47-907c-fc49-9041-cdeba6c3f647')
+UUID_BOOT_FW_BLOCK =        uuid.UUID('e1c38579-4a5e-8947-b696-6d75a1835533')
+UUID_KERNEL_FW_BLOCK =      uuid.UUID('2b74541d-6e2e-6d48-ad21-fa5271f39b92')
+
+UUID_BOOT_FW_ELF_BLOCK =    uuid.UUID('5343212a-e95f-5142-9ac8-5d831b0a9416')
 
 def get_next_block_header(bin_file):
     return asa_block(bin_file.read(asa_block.size))
-
 
 def get_next_block_header_meta_data(bin_file, block_header):
     if block_header.MetaDataLength > 0:
@@ -175,10 +192,7 @@ def parse_block(bin_file):
 
     return block_header, block_meta_data
 
-
-
-
-
+5
 class AsaBlock():
     def __init__(self, asa_block_header, meta_data, data):
         self._asa_block_header = asa_block_header
@@ -217,7 +231,7 @@ def pprint_tree(node, file=None, _prefix="", _last=True):
 
 
 
-def make_blocks(bin_file):
+def get_blocks_from_file(bin_file, dump_blocks=False):
     header, header_metadata_headers = parse_block(bin_file)
     starting_offset = bin_file.tell()
     current_size = bin_file.tell() - starting_offset
@@ -225,24 +239,30 @@ def make_blocks(bin_file):
     if header.HasSubBlocks:
         data = []
         while current_size < header.DataLength:
-            data.append(make_blocks(bin_file))
+            data.append(get_blocks_from_file(bin_file, dump_blocks))
             current_size = bin_file.tell() - starting_offset
     else:
         if header.DataLength > 0:
             data = f"DATA BLOCK [{hex(header.DataLength)}]"
-            bin_file.seek(header.DataLength, os.SEEK_CUR)
+            if dump_blocks:
+                data += " " + f"/tmp/{header.UUID}.bin"
+                with open(f"/tmp/{header.UUID}.bin", "wb") as output_block_bin:
+                    output_block_bin.write(bin_file.read(header.DataLength))
+            else:
+                bin_file.seek(header.DataLength, os.SEEK_CUR)
     
     return AsaBlock(header, header_metadata_headers, data)
 
-
-
+def check_for_asa_fw_blob(bin_file):
+    first_uuid = bin_file.read(0x10)
+    if uuid.UUID(bytes=first_uuid) != UUID_ASA_FW_BLOB:
+        bin_file.seek(0, os.SEEK_SET)
 
 if __name__ == "__main__":
    with open(sys.argv[1], "rb") as bin_file:
-       bin_file.seek(0x10, os.SEEK_SET)
-       pprint_tree(make_blocks(bin_file))
 
-
+       check_for_asa_fw_blob(bin_file)
+       pprint_tree(get_blocks_from_file(bin_file, True))
 
 #pos = 0x2a0
 #with open("/home/sean/asa5508/ftd-boot-9.16.1.0.lfbff", "rb") as abin:
