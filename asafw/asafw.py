@@ -1,5 +1,7 @@
 import cstruct
 import uuid
+import os
+import io
 
 # from 0x30 to 0x1cf
 class asa_field1(cstruct.CStruct):
@@ -53,7 +55,6 @@ def get_next_field1_data(bin_file, header):
     return bin_file.read(header.length)   
 
 def parse_field1_headers(bin_file):
-    bin_file.seek(0x30)
     cur_field = 0
     headers = []
     while cur_field < 12:
@@ -108,20 +109,70 @@ def gen_asa_raw_field1_headers(issuer1="CN=CiscoSystems;OU=NCS_Kenton_ASA;O=Cisc
 
 
 
-# starting 0x1c0
-class asa_field2(cstruct.CStruct):
+# starting 0x10 then next is 0x1d0 
+class asa_block(cstruct.CStruct):
     __byte_order__ = cstruct.LITTLE_ENDIAN
     __struct__ = """
-    unsigned char field[16];
+    unsigned char block_uuid_raw[16];
     unsigned char meta_data_length;
     unsigned char unkown1;
     unsigned int data_length;
-    unsigned char unkown2[2]
-    unsigned char meta_data
+    unsigned char unkown2[2];
+    unsigned char sub_blocks;
     unsigned char unkown3[7];
     """
 
+    @property
+    def MetaDataLength(self):
+        return (self.meta_data_length << 4)
 
+    @MetaDataLength.setter
+    def MetaDataLength(self, val):
+        self.meta_data_length = val >> 4
+
+    @property
+    def DataLength(self):
+        return (self.data_length >> 4)
+    
+    @DataLength.setter
+    def DataLength(self, val):
+        self.data_length = val << 4
+
+    @property
+    def UUID(self):
+        return uuid.UUID(bytes=bytes(self.block_uuid_raw))
+    
+    @UUID.setter
+    def UUID(self, val):
+        if isinstance(val, str):
+            self.block_uuid_raw = uuid.UUID(val)
+    
+    @property
+    def HasSubBlocks(self):
+        return True if self.sub_blocks == 1 else False
+
+UUID_MAIN_CONTAINER = uuid.UUID('60d090eb-09f7-1a4a-9f30-9e45f7287490')
+
+def get_next_block_header(bin_file):
+    return asa_block(bin_file.read(asa_block.size))
+
+
+def get_next_block_header_meta_data(bin_file, block_header):
+    if block_header.MetaDataLength > 0:
+        return bin_file.read(block_header.MetaDataLength)
+    else:
+        return None
+
+def parse_block(bin_file):
+    block_header = get_next_block_header(bin_file)
+    block_meta_data = None
+    if block_header.MetaDataLength > 0:
+        block_meta_data = get_next_block_header_meta_data(bin_file, block_header)
+        if block_header.UUID == UUID_MAIN_CONTAINER:
+            meta_data_bin = io.BytesIO(block_meta_data)
+            block_meta_data = parse_field1_headers(meta_data_bin)
+
+    return block_header, block_meta_data
 
 
 #pos = 0x2a0
