@@ -3,6 +3,7 @@ import uuid
 import os
 import io
 import sys
+import shutil
 
 # from 0x30 to 0x1cf
 class asa_field1(cstruct.CStruct):
@@ -192,32 +193,69 @@ def parse_block(bin_file):
 
     return block_header, block_meta_data
 
-5
+
 class AsaBlock():
     def __init__(self, asa_block_header, meta_data, data):
-        self._asa_block_header = asa_block_header
-        self._meta_data = meta_data
-        self._data = data
+        self.asa_block_header = asa_block_header
+        self.meta_data = meta_data
+        self.data = data
 
     def __str__(self):
-        return f"[{self._asa_block_header.UUID}]"
+        return f"[{self.asa_block_header.UUID}]"
     
     @property
     def children(self):
         child_list = []
-        if self._meta_data is not None:
-            if isinstance(self._meta_data, list):
-                child_list.extend(self._meta_data)
+        if self.meta_data is not None:
+            if isinstance(self.meta_data, list):
+                child_list.extend(self.meta_data)
             else:
-                child_list.append(self._meta_data)
-        if self._data is not None:
-            if isinstance(self._data, list):
-                child_list.extend(self._data)
+                child_list.append(self.meta_data)
+        if self.data is not None:
+            if isinstance(self.data, list):
+                child_list.extend(self.data)
             else:
-                child_list.append(self._data)
+                child_list.append(self.data)
         return child_list
-        
 
+
+def get_boundary_aligned_length(length):
+    return length if length == (length & (~0xf)) else (length & (~0xf)) + 0x10
+
+def pad_to_boundary(bin_file):
+    pos = bin_file.tell()
+    new_pos = get_boundary_aligned_length(pos)
+    if new_pos > pos:
+        bin_file.write(bytearray(b'\x00') * (new_pos - pos))
+
+def write_block(bin_file, block):
+    meta_data_raw = bytearray()
+    if block.meta_data is not None:
+        if isinstance(block.meta_data, bytes):
+            meta_data_raw = bytearray(block.meta_data)
+        else:
+            meta_data_raw = bytearray(block.meta_data.pack())
+    block.asa_block_header.MetaDataLength = get_boundary_aligned_length(len(meta_data_raw))
+
+    if block.data is not None:
+        if isinstance(block.data, io.IOBase):
+            block.data.seek(0, io.SEEK_END)
+            block.asa_block_header.DataLength = get_boundary_aligned_length(block.tell())
+            block.data.seek(0, io.SEEK_SET)
+        elif isinstance(block.data, bytes):
+            block.asa_block_header.DataLength = get_boundary_aligned_length(len(block.data))
+
+    bin_file.write(block.asa_block_header.pack())
+    if len(meta_data_raw) > 0:
+        bin_file.write(meta_data_raw)
+        pad_to_boundary(bin_file)
+
+    if isinstance(block.data, io.IOBase):
+        shutil.copyfileobj(block.data, bin_file)
+        pad_to_boundary(bin_file)
+    elif isinstance(block.data, bytes):
+        bin_file.write(block.data)
+        pad_to_boundary(bin_file)
 
 
 def pprint_tree(node, file=None, _prefix="", _last=True):
@@ -228,8 +266,6 @@ def pprint_tree(node, file=None, _prefix="", _last=True):
         for i, child in enumerate(node.children):
             _last = i == (child_count - 1)
             pprint_tree(child, file, _prefix, _last)
-
-
 
 def get_blocks_from_file(bin_file, dump_blocks=False):
     header, header_metadata_headers = parse_block(bin_file)

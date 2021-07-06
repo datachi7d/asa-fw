@@ -99,3 +99,11 @@ def test_get_next_block():
 def test_gen_block1():
     block_header = asafw.asa_block(UUID=asafw.UUID_MAIN_CONTAINER, HasSubBlocks=True, MetaDataLength=0x1a0, DataLength=0x62c8850)
     assert(block_header.pack() == raw_header_1[0x10:0x30])
+
+    KernelParams_block = asafw.AsaBlock(asafw.asa_block(UUID=asafw.UUID_KERNEL_PARAMS), meta_data=b'root=/dev/ram quiet loglevel=0 auto kstack=128 reboot=force panic=1 processor.max_cstate=1 useCiscoDma ', data=None)
+
+    bin_file = io.BytesIO()
+    asafw.write_block(bin_file, KernelParams_block)
+
+    output_bytes = bin_file.getvalue()
+    assert(raw_header_1[0x210:0x2a0] == output_bytes)
