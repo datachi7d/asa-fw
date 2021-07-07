@@ -194,6 +194,10 @@ def parse_block(bin_file):
     return block_header, block_meta_data
 
 
+
+def get_boundary_aligned_length(length):
+    return length if length == (length & (~0xf)) else (length & (~0xf)) + 0x10
+
 class AsaBlock():
     def __init__(self, asa_block_header, meta_data, data):
         self.asa_block_header = asa_block_header
@@ -218,9 +222,47 @@ class AsaBlock():
                 child_list.append(self.data)
         return child_list
 
+    @property
+    def meta_data(self):
+        return self._meta_data
+    
+    @meta_data.setter
+    def meta_data(self, val):
+        if val is None:
+            self.asa_block_header.MetaDataLength = 0
+        elif isinstance(val, bytes):
+            self._meta_data = val
+            self.asa_block_header.MetaDataLength = get_boundary_aligned_length(len(val))
+        else:
+            raise Exception("Invalid type")
+        self._meta_data = val
 
-def get_boundary_aligned_length(length):
-    return length if length == (length & (~0xf)) else (length & (~0xf)) + 0x10
+    @property
+    def data(self):
+        return self._data
+
+    @data.setter
+    def data(self, val):
+        if not self.asa_block_header.HasSubBlocks:
+            if val is None:
+                self.asa_block_header.DataLength = 0
+            elif isinstance(val, io.IOBase):
+                val.seek(0, io.SEEK_END)
+                self.asa_block_header.DataLength = get_boundary_aligned_length(val.tell())
+                val.seek(0, io.SEEK_SET)
+            elif isinstance(val, bytes):
+                self.asa_block_header.DataLength = get_boundary_aligned_length(len(val))
+            else:
+                raise Exception("Invalid type")
+        else:
+            for item in val:
+                self.asa_block_header.DataLength += (
+                    item.asa_block_header.size + 
+                    item.asa_block_header.MetaDataLength + 
+                    item.asa_block_header.DataLength
+                )
+        self._data = val
+    
 
 def pad_to_boundary(bin_file):
     pos = bin_file.tell()
@@ -229,33 +271,26 @@ def pad_to_boundary(bin_file):
         bin_file.write(bytearray(b'\x00') * (new_pos - pos))
 
 def write_block(bin_file, block):
-    meta_data_raw = bytearray()
-    if block.meta_data is not None:
-        if isinstance(block.meta_data, bytes):
-            meta_data_raw = bytearray(block.meta_data)
-        else:
-            meta_data_raw = bytearray(block.meta_data.pack())
-    block.asa_block_header.MetaDataLength = get_boundary_aligned_length(len(meta_data_raw))
-
-    if block.data is not None:
-        if isinstance(block.data, io.IOBase):
-            block.data.seek(0, io.SEEK_END)
-            block.asa_block_header.DataLength = get_boundary_aligned_length(block.tell())
-            block.data.seek(0, io.SEEK_SET)
-        elif isinstance(block.data, bytes):
-            block.asa_block_header.DataLength = get_boundary_aligned_length(len(block.data))
 
     bin_file.write(block.asa_block_header.pack())
-    if len(meta_data_raw) > 0:
-        bin_file.write(meta_data_raw)
+    if block.asa_block_header.MetaDataLength > 0:
+        bin_file.write(block.meta_data)
         pad_to_boundary(bin_file)
 
-    if isinstance(block.data, io.IOBase):
-        shutil.copyfileobj(block.data, bin_file)
-        pad_to_boundary(bin_file)
-    elif isinstance(block.data, bytes):
-        bin_file.write(block.data)
-        pad_to_boundary(bin_file)
+    if not block.asa_block_header.HasSubBlocks:
+        if isinstance(block.data, io.IOBase):
+            shutil.copyfileobj(block.data, bin_file)
+            pad_to_boundary(bin_file)
+        elif isinstance(block.data, bytes):
+            bin_file.write(block.data)
+            pad_to_boundary(bin_file)
+    else:
+        for item in block.data:
+            write_block(bin_file, item)
+    
+
+def write_asa(bin_file, top_block):
+    bin_file.write(UUID_ASA_FW_BLOB.bytes)
 
 
 def pprint_tree(node, file=None, _prefix="", _last=True):

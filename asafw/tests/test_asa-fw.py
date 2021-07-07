@@ -100,10 +100,35 @@ def test_gen_block1():
     block_header = asafw.asa_block(UUID=asafw.UUID_MAIN_CONTAINER, HasSubBlocks=True, MetaDataLength=0x1a0, DataLength=0x62c8850)
     assert(block_header.pack() == raw_header_1[0x10:0x30])
 
-    KernelParams_block = asafw.AsaBlock(asafw.asa_block(UUID=asafw.UUID_KERNEL_PARAMS), meta_data=b'root=/dev/ram quiet loglevel=0 auto kstack=128 reboot=force panic=1 processor.max_cstate=1 useCiscoDma ', data=None)
+    KernelParams_block = asafw.AsaBlock(
+        asafw.asa_block(UUID=asafw.UUID_KERNEL_PARAMS), 
+        meta_data=b'root=/dev/ram quiet loglevel=0 auto kstack=128 reboot=force panic=1 processor.max_cstate=1 useCiscoDma ', 
+        data=None)
 
     bin_file = io.BytesIO()
     asafw.write_block(bin_file, KernelParams_block)
-
     output_bytes = bin_file.getvalue()
     assert(raw_header_1[0x210:0x2a0] == output_bytes)
+    bin_file.close()
+
+    FW_block = asafw.AsaBlock(
+        asafw.asa_block(UUID=asafw.UUID_FW_CONTAINER, HasSubBlocks=True),
+        meta_data=b'[\x0cu\x0c\x99\x0cw\x0c\x9b\x0c\xba\x0c\xbb\x0c\xae\x0c\xaf\x0c\xc1\x0c\xc2\x0c',
+        data = [
+            KernelParams_block,
+            asafw.AsaBlock(asafw.asa_block(UUID=asafw.UUID_ROOTFS_FW_BLOCK),
+            meta_data=None,
+            data=io.BytesIO(bytearray(b'\x00') * 0x5e83ed0)
+            ),
+            asafw.AsaBlock(asafw.asa_block(UUID=asafw.UUID_BOOT_FW_BLOCK),
+            meta_data=None,
+            data=io.BytesIO(bytearray(b'\x00') * (0x62c8740 - 0x5e83ed0))
+            )
+        ]
+    )
+    bin_file = io.BytesIO()
+    asafw.write_block(bin_file, FW_block)
+    output_bytes = bin_file.getvalue()
+    assert(raw_header_1[0x1d0:0x2c0] == output_bytes[:(0x2c0-0x1d0)])
+    bin_file.close()
+
