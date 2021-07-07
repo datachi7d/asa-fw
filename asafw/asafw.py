@@ -5,7 +5,6 @@ import io
 import sys
 import shutil
 
-# from 0x30 to 0x1cf
 class asa_field1(cstruct.CStruct):
     __byte_order__ = cstruct.BIG_ENDIAN
     __struct__ = """
@@ -79,7 +78,6 @@ def parse_field1_headers(bin_file):
     return headers
 
 
-
 def gen_asa_raw_field1_headers(issuer1="CN=CiscoSystems;OU=NCS_Kenton_ASA;O=CiscoSystems", 
                         serial="60A6A3E5", 
                         issuer2="CN=CiscoSystems;OU=NCS_Kenton_ASA;O=CiscoSystems",
@@ -104,14 +102,9 @@ def gen_asa_raw_field1_headers(issuer1="CN=CiscoSystems;OU=NCS_Kenton_ASA;O=Cisc
         result += bytearray(header.pack())
     
     result += bytearray(b'\xeb')
-    #TODO: move this into the container
-    result += bytearray("\00" * (0x1a0 - len(result)), 'ascii')
 
     return bytes(result)
 
-
-
-# starting 0x10 then next is 0x1d0 
 class asa_block(cstruct.CStruct):
     __byte_order__ = cstruct.LITTLE_ENDIAN
     __struct__ = """
@@ -172,28 +165,6 @@ UUID_BOOT_FW_BLOCK =        uuid.UUID('e1c38579-4a5e-8947-b696-6d75a1835533')
 UUID_KERNEL_FW_BLOCK =      uuid.UUID('2b74541d-6e2e-6d48-ad21-fa5271f39b92')
 
 UUID_BOOT_FW_ELF_BLOCK =    uuid.UUID('5343212a-e95f-5142-9ac8-5d831b0a9416')
-
-def get_next_block_header(bin_file):
-    return asa_block(bin_file.read(asa_block.size))
-
-def get_next_block_header_meta_data(bin_file, block_header):
-    if block_header.MetaDataLength > 0:
-        return bin_file.read(block_header.MetaDataLength)
-    else:
-        return None
-
-def parse_block(bin_file):
-    block_header = get_next_block_header(bin_file)
-    block_meta_data = None
-    if block_header.MetaDataLength > 0:
-        block_meta_data = get_next_block_header_meta_data(bin_file, block_header)
-        if block_header.UUID == UUID_MAIN_CONTAINER:
-            meta_data_bin = io.BytesIO(block_meta_data)
-            block_meta_data = parse_field1_headers(meta_data_bin)
-
-    return block_header, block_meta_data
-
-
 
 def get_boundary_aligned_length(length):
     return length if length == (length & (~0xf)) else (length & (~0xf)) + 0x10
@@ -288,10 +259,30 @@ def write_block(bin_file, block):
         for item in block.data:
             write_block(bin_file, item)
     
-
 def write_asa(bin_file, top_block):
     bin_file.write(UUID_ASA_FW_BLOB.bytes)
+    write_block(bin_file, top_block)
 
+
+def get_next_block_header(bin_file):
+    return asa_block(bin_file.read(asa_block.size))
+
+def get_next_block_header_meta_data(bin_file, block_header):
+    if block_header.MetaDataLength > 0:
+        return bin_file.read(block_header.MetaDataLength)
+    else:
+        return None
+
+def parse_block(bin_file):
+    block_header = get_next_block_header(bin_file)
+    block_meta_data = None
+    if block_header.MetaDataLength > 0:
+        block_meta_data = get_next_block_header_meta_data(bin_file, block_header)
+        if block_header.UUID == UUID_MAIN_CONTAINER:
+            meta_data_bin = io.BytesIO(block_meta_data)
+            block_meta_data = parse_field1_headers(meta_data_bin)
+
+    return block_header, block_meta_data
 
 def pprint_tree(node, file=None, _prefix="", _last=True):
     print(_prefix, "`- " if _last else "|- ", str(node), sep="", file=file)
@@ -329,26 +320,10 @@ def check_for_asa_fw_blob(bin_file):
     if uuid.UUID(bytes=first_uuid) != UUID_ASA_FW_BLOB:
         bin_file.seek(0, os.SEEK_SET)
 
+
 if __name__ == "__main__":
    with open(sys.argv[1], "rb") as bin_file:
 
        check_for_asa_fw_blob(bin_file)
        pprint_tree(get_blocks_from_file(bin_file, True))
-
-#pos = 0x2a0
-#with open("/home/sean/asa5508/ftd-boot-9.16.1.0.lfbff", "rb") as abin:
-#    abin.seek(0,2)
-#    file_size = abin.tell()
-#    print(file_size)
-#    while pos < file_size:
-#        abin.seek(pos)
-#        data_asa2 = abin.read(asa_field2.size)
-#        asa_header2 = asa_field2(data_asa2)
-#        print(f"[{hex(pos)}] {uuid.UUID(bytes=bytes(asa_header2.field))} ({hex(asa_header2.bits >> 4)})")
-#        abin.seek(pos + asa_field2.size)
-#        data_segment = abin.read((asa_header2.bits >> 4))
-#        with open(f"/tmp/{uuid.UUID(bytes=bytes(asa_header2.field))}","wb") as output_bin:
-#            output_bin.write(data_segment)
-#        print(len(data_segment))
-#        pos += (asa_header2.bits >> 4) + asa_field2.size
 
