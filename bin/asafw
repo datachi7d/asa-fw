@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+
+import argparse
+import asafw.asafw as asafw
+import sys
+
+
+
+
+
+if __name__ == "__main__":
+
+
+    parser = argparse.ArgumentParser(description="ASA Firmware tool")
+
+    subparser = parser.add_subparsers(required=True)
+
+    extract_parser = subparser.add_parser('extract')
+    extract_parser.set_defaults(command='extract')
+    extract_parser.add_argument('file', type=str, help="File to extract")
+    extract_parser.add_argument('--output-dir', type=str, default='/tmp', help="Directory to extract blocks to")
+    extract_parser.add_argument('--display-only',action='store_true', help='Only display blocks (do not extract)')
+    
+
+    create_parser = subparser.add_parser('create')
+    create_parser.set_defaults(command='create')
+
+    create_subparser = create_parser.add_subparsers(required=True)
+
+    create_boot_parser = create_subparser.add_parser('boot')
+    create_boot_parser.set_defaults(create_command='boot')
+    create_boot_parser.add_argument('file', type=str, help='Input boot binary to package')
+    create_boot_parser.add_argument('--output', type=str, help='Output file')
+
+    args = parser.parse_args()
+
+    if args.command == 'extract':
+        with open(args.file, "rb") as bin_file:
+            asafw.check_for_asa_fw_blob(bin_file)
+            asafw.pprint_tree(asafw.get_blocks_from_file(bin_file, args.output_dir, not args.display_only))
+    elif args.command == 'create':
+        if args.create_command == 'boot':
+            pass

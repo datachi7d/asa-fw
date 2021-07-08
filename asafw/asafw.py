@@ -2,8 +2,8 @@ import cstruct
 import uuid
 import os
 import io
-import sys
 import shutil
+import gzip
 
 class asa_field1(cstruct.CStruct):
     __byte_order__ = cstruct.BIG_ENDIAN
@@ -204,8 +204,10 @@ class AsaBlock():
         elif isinstance(val, bytes):
             self._meta_data = val
             self.asa_block_header.MetaDataLength = get_boundary_aligned_length(len(val))
+        elif isinstance(val,list):
+            pass
         else:
-            raise Exception("Invalid type")
+            raise Exception(f"Invalid type {type(val)}")
         self._meta_data = val
 
     @property
@@ -223,6 +225,8 @@ class AsaBlock():
                 val.seek(0, io.SEEK_SET)
             elif isinstance(val, bytes):
                 self.asa_block_header.DataLength = get_boundary_aligned_length(len(val))
+            elif isinstance(val, str):
+                pass
             else:
                 raise Exception("Invalid type")
         else:
@@ -329,7 +333,7 @@ def pprint_tree(node, file=None, _prefix="", _last=True):
             _last = i == (child_count - 1)
             pprint_tree(child, file, _prefix, _last)
 
-def get_blocks_from_file(bin_file, dump_blocks=False):
+def get_blocks_from_file(bin_file, output_directory, dump_blocks=False,):
     header, header_metadata_headers = parse_block(bin_file)
     starting_offset = bin_file.tell()
     current_size = bin_file.tell() - starting_offset
@@ -337,15 +341,31 @@ def get_blocks_from_file(bin_file, dump_blocks=False):
     if header.HasSubBlocks:
         data = []
         while current_size < header.DataLength:
-            data.append(get_blocks_from_file(bin_file, dump_blocks))
+            output_dir = os.path.join(output_directory, str(header.UUID))
+            data.append(get_blocks_from_file(bin_file, output_dir, dump_blocks))
             current_size = bin_file.tell() - starting_offset
     else:
         if header.DataLength > 0:
             data = f"DATA BLOCK [{hex(header.DataLength)}]"
             if dump_blocks:
-                data += " " + f"/tmp/{header.UUID}.bin"
-                with open(f"/tmp/{header.UUID}.bin", "wb") as output_block_bin:
+                output_dir = os.path.join(output_directory, str(header.UUID))
+                if not os.path.isdir(output_dir):
+                    os.makedirs(output_dir, exist_ok=True)
+                output_path = os.path.join(output_dir, "block")
+                data += " " + f"{output_path}"
+                with open(f"{output_path}", "wb") as output_block_bin:
                     output_block_bin.write(bin_file.read(header.DataLength))
+                try:
+                    with gzip.open(f"{output_path}", 'rb') as f_in:
+                        with open(f"{output_path}.bin", 'wb') as f_out:
+                            shutil.copyfileobj(f_in, f_out)
+                            data += ",block.bin"
+                    if header.UUID == UUID_BOOT_FW_BLOCK:
+                        with open(f"{output_path}.bin", 'rb') as sub_bin:
+                            data = [get_blocks_from_file(sub_bin, output_dir, dump_blocks)]
+                            header.HasSubBlocks = True
+                except Exception as e:
+                    pass
             else:
                 bin_file.seek(header.DataLength, os.SEEK_CUR)
     
@@ -355,11 +375,4 @@ def check_for_asa_fw_blob(bin_file):
     first_uuid = bin_file.read(0x10)
     if uuid.UUID(bytes=first_uuid) != UUID_ASA_FW_BLOB:
         bin_file.seek(0, os.SEEK_SET)
-
-
-if __name__ == "__main__":
-   with open(sys.argv[1], "rb") as bin_file:
-
-       check_for_asa_fw_blob(bin_file)
-       pprint_tree(get_blocks_from_file(bin_file, True))
 
