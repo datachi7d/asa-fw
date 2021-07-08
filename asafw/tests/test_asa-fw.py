@@ -127,3 +127,12 @@ def test_gen_block1():
     output_bytes = bin_file.getvalue()
     assert(raw_header_1[0x10:0x2c0] == output_bytes[:0x2c0-0x10])
     bin_file.close()
+
+def test_write_asa():
+    bin_file = io.BytesIO()
+    asafw.write_asa(bin_file, asafw.gen_blocks(
+        rootfs_block=io.BytesIO(bytearray(b'\x00') * 0x5e83ed0),
+        kernel_block=io.BytesIO(bytearray(b'\x00') * 0x444870)
+    ))
+    output_bytes = bin_file.getvalue()
+    assert(raw_header_1[:0x2c0] == output_bytes[:0x2c0])

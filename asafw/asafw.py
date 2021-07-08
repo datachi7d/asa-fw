@@ -258,7 +258,43 @@ def write_block(bin_file, block):
     else:
         for item in block.data:
             write_block(bin_file, item)
-    
+
+
+def gen_blocks(
+    serial="5AB844ED",
+    magic_key=b"C\x9e]3c4\xac\xb3\xdb\x84\xdcw;\x18\xe4\xde\xbdx\x0f\x12y\x8c\xfaKy\xb5\xbb\x12&\xd5'\x1c\x05\x98\x05O\xc1\x9d|\xdes\xcfT\xb3J\xce<J\x83{\x8f\xbe\x83\x1c\xcf\xbc\xfc\xd7\xb0. \xa7Z\xbb\x1fD\xab\xd3_\x98\t2%\xa8\x95\x98+\x91d\xbf\xf0\xaf\x88(\xa7\xb0\xa6<~\x10\xa18o-\xd9\xf5\x84\xd1\xc3\x85\xb3\xeb,\x90\x16\x82\xb1,G\x8a\xf2\x8e#9\x7f\xed\xef7\x93'\xbcsn\x80\xddu\xf7\x9d!\x18N\t\x19\xf4O{\x1cj\xdbb{\xd8=1\xfe\x0c\xe4\x1a?\x8bg\x1c\xc5dE.\x8d\x99\xb4\x99\x06\xa1%\xb5\x03{\x0c\xbdm\xbfl^\xc1TD\xc3&b\xc8\x8epB\xa0\t\xeeM\xa1\x05\xc45\x08<\xe7\xc3}\xa2[cWz5\xabR\xc3\xe1\x9b\xf2J\xd3\x98W\xc3\xef\xe1:\n\x81\xd3\xe5\xd7\x1a\xfdGM\x1a\xe7O\xd8\x92_\xd0\xf7*\x1c\xe2\x99\xc6\xc7]f&U\xc0{U\x91\x91\xb5\xeb\x13\xed\xfd\xcd\xa7\xd9\xb5",
+    fw_meta_data=b'[\x0cu\x0c\x99\x0cw\x0c\x9b\x0c\xba\x0c\xbb\x0c\xae\x0c\xaf\x0c\xc1\x0c\xc2\x0c',
+    kernel_options='root=/dev/ram quiet loglevel=0 auto kstack=128 reboot=force panic=1 processor.max_cstate=1 useCiscoDma ',
+    rootfs_block=None,
+    kernel_block=None):
+
+    return AsaBlock(
+        asa_block(UUID=UUID_MAIN_CONTAINER, HasSubBlocks=True),  
+        meta_data=gen_asa_raw_field1_headers(
+            serial=serial,
+            magic_key=magic_key
+        ),
+        data=[
+            AsaBlock(
+                asa_block(UUID=UUID_FW_CONTAINER, HasSubBlocks=True),
+                meta_data=fw_meta_data,
+                data = [
+                    AsaBlock(
+                        asa_block(UUID=UUID_KERNEL_PARAMS), 
+                        meta_data=bytes(kernel_options, 'ascii'), 
+                        data=None),
+                    AsaBlock(asa_block(UUID=UUID_ROOTFS_FW_BLOCK),
+                        meta_data=None,
+                        data=rootfs_block),
+                    AsaBlock(asa_block(UUID=UUID_BOOT_FW_BLOCK),
+                        meta_data=None,
+                        data=kernel_block)
+                ]
+            )    
+        ]
+    )
+
+
 def write_asa(bin_file, top_block):
     bin_file.write(UUID_ASA_FW_BLOB.bytes)
     write_block(bin_file, top_block)
