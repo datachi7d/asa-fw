@@ -5,12 +5,7 @@ import asafw.asafw as asafw
 import sys
 
 
-
-
-
 if __name__ == "__main__":
-
-
     parser = argparse.ArgumentParser(description="ASA Firmware tool")
 
     subparser = parser.add_subparsers(required=True)
@@ -21,7 +16,6 @@ if __name__ == "__main__":
     extract_parser.add_argument('--output-dir', type=str, default='/tmp', help="Directory to extract blocks to")
     extract_parser.add_argument('--display-only',action='store_true', help='Only display blocks (do not extract)')
     
-
     create_parser = subparser.add_parser('create')
     create_parser.set_defaults(command='create')
 
@@ -40,4 +34,5 @@ if __name__ == "__main__":
             asafw.pprint_tree(asafw.get_blocks_from_file(bin_file, args.output_dir, not args.display_only))
     elif args.command == 'create':
         if args.create_command == 'boot':
-            pass
+            with open(args.file, 'rb') as input_block:
+                asafw.create_boot_block(args.output, input_block)

@@ -4,6 +4,7 @@ import os
 import io
 import shutil
 import gzip
+import tempfile
 
 class asa_field1(cstruct.CStruct):
     __byte_order__ = cstruct.BIG_ENDIAN
@@ -376,3 +377,9 @@ def check_for_asa_fw_blob(bin_file):
     if uuid.UUID(bytes=first_uuid) != UUID_ASA_FW_BLOB:
         bin_file.seek(0, os.SEEK_SET)
 
+def create_boot_block(output_file, input_block):
+    with gzip.open(output_file, 'wb') as gzip_block:
+        write_block(gzip_block, AsaBlock(asa_block(UUID=UUID_BOOT_FW_ELF_BLOCK), None, input_block))
+        gzip_block.fileobj = ''
+        
+        
