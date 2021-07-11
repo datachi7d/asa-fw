@@ -35,4 +35,5 @@ if __name__ == "__main__":
     elif args.command == 'create':
         if args.create_command == 'boot':
             with open(args.file, 'rb') as input_block:
-                asafw.create_boot_block(args.output, input_block)
+                with open(args.output, 'wb') as output_block:
+                    asafw.create_boot_block(output_block, input_block)
