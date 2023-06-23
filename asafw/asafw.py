@@ -1,3 +1,4 @@
+from hashlib import sha1
 import cstruct
 import uuid
 import os
@@ -5,6 +6,7 @@ import io
 import shutil
 import gzip
 import tempfile
+from Crypto.Hash import MD5, SHA512, SHA256
 
 class asa_field1(cstruct.CStruct):
     __byte_order__ = cstruct.BIG_ENDIAN
@@ -325,6 +327,23 @@ def parse_block(bin_file):
 
     return block_header, block_meta_data
 
+
+def get_hash(bin_file, length):
+    raw_data = bin_file.read(length)
+    raw_hash = SHA512.new(raw_data).digest().hex()
+    bin_file.seek(-length, os.SEEK_CUR)
+    return raw_hash
+
+def try_hash(bin_file):
+    raw_data = bin_file.read()
+
+    for i in range(0, len(raw_data)):
+        raw_hash = SHA512.new(raw_data[i:]).digest().hex()
+        print(f"[{i}:] {raw_hash}")
+        if raw_hash.lower() == "2960fd01b541c4a42bca4a28dc7afbab16b44221defe219acd31d06d99db25e1d8ae1be3a4c2d5bbf337159009b1c4b72e3b424c91f0dbc399a95c0e4ea5239d":
+            exit()
+    
+
 def pprint_tree(node, file=None, _prefix="", _last=True):
     print(_prefix, "`- " if _last else "|- ", str(node), sep="", file=file)
     _prefix += "   " if _last else "|  "
@@ -368,6 +387,8 @@ def get_blocks_from_file(bin_file, output_directory, dump_blocks=False,):
                 except Exception as e:
                     pass
             else:
+
+                #data +=  f"sum: f{raw_hash.digest()}"
                 bin_file.seek(header.DataLength, os.SEEK_CUR)
     
     return AsaBlock(header, header_metadata_headers, data)

@@ -1,0 +1,11 @@
+[project]
+name = "asafw"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = [
+  'cstruct >= 5.2',
+  'pycryptodome >= 3.18.0',
+]
+
+[project.scripts]
+asafw = "asafw.asafw_cmd:main"
