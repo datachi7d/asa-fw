@@ -50,6 +50,7 @@ def main():
     create_fw_parser = create_subparser.add_parser('fw')
     create_fw_parser.set_defaults(create_command='fw')
     create_fw_parser.add_argument('--kernel', type=str, help='Input kernel')
+    create_fw_parser.add_argument('--kernel-options', type=str, help='Kernel args')
     create_fw_parser.add_argument('--rootfs', type=str, help='Input rootfs')
     create_fw_parser.add_argument('--output', type=str, help='Output file')
 
@@ -69,4 +70,4 @@ def main():
             with open(args.kernel, 'rb') as input_kernel:
                 with open(args.rootfs, 'rb') as input_rootfs:
                     with open(args.output, 'wb') as bin_file:
-                        asafw.write_asa(bin_file, asafw.gen_blocks(rootfs_block=input_rootfs, kernel_block=input_kernel))
+                        asafw.write_asa(bin_file, asafw.gen_blocks(rootfs_block=input_rootfs, kernel_block=input_kernel, kernel_options=args.kernel_options))
